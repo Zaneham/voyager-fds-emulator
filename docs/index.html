@@ -983,10 +983,22 @@
 
                 // Check for label
                 const labelMatch = cleaned.match(/^(\w+):\s*(.*)/);
+                let code = cleaned;
                 if (labelMatch) {
                     labels[labelMatch[1].toUpperCase()] = addr;
-                    const rest = labelMatch[2].trim();
-                    if (rest) addr++;
+                    code = labelMatch[2].trim();
+                }
+                if (!code) continue;
+
+                // Check for ORG directive (changes addr, not an instruction)
+                const parts = code.toUpperCase().split(/\s+/);
+                if (parts[0] === 'ORG') {
+                    const orgVal = parts[1] || '0';
+                    if (orgVal.startsWith('$')) {
+                        addr = parseInt(orgVal.slice(1), 16);
+                    } else {
+                        addr = parseInt(orgVal, 10) || 0;
+                    }
                 } else {
                     addr++;
                 }
