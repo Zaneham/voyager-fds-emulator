@@ -540,21 +540,24 @@ int fds_cpu_step(fds_cpu_t *cpu, fds_io_t *io)
         break;
 
     /* --------------------------------------------------------------------
-     * ALU Operations (1001)
-     * Sub-operation determined by bits 11-8
+     * ALU Operations (1001) - per JPL MJS 2.64A Figure 2
+     * Bits 11-10 determine major category:
+     *   00 = Arithmetic (ADD, LXR, AND, LOR) - bits 9-8 select op
+     *   01 = SUB (bit9=0) or Short Shifts (bit9=1)
+     *   10 = SLC (Skip on Line Count)
+     *   11 = Skip instructions - bits 9-7 select type
      * -------------------------------------------------------------------- */
     case FDS_OP_ALU:
         {
-            uint8_t subop = (instr >> 8) & 0x0F;
+            uint8_t bits_11_10 = (instr >> 10) & 0x03;
+            uint8_t bits_9_8 = (instr >> 8) & 0x03;
 
-            /* Bits 11-10 = 00: Arithmetic (ADD, LXR, AND, LOR, SUB) */
-            if ((subop & 0x0C) == 0x00) {
-                uint8_t aluop = (instr >> 4) & 0x03;
-                /* Source is typically RB or memory, dest is RA */
+            /* Bits 11-10 = 00: Arithmetic (ADD, LXR, AND, LOR) */
+            if (bits_11_10 == 0x00) {
                 uint16_t operand = cpu->rb;
                 uint32_t result;
 
-                switch (aluop) {
+                switch (bits_9_8) {
                 case 0: /* ADD */
                     result = (uint32_t)cpu->ra + operand;
                     cpu->flags.carry = (result > 0xFFFF);
@@ -573,50 +576,91 @@ int fds_cpu_step(fds_cpu_t *cpu, fds_io_t *io)
                 }
                 cycles = 6;
             }
-            /* Bits 11-10 = 01, bit 9 = 0: SUB */
-            else if ((subop & 0x0E) == 0x04) {
-                uint32_t result = (uint32_t)cpu->ra - cpu->rb;
-                cpu->flags.carry = (cpu->ra < cpu->rb);
-                cpu->ra = result & 0xFFFF;
-                cycles = 6;
+            /* Bits 11-10 = 01: SUB or Short Shifts */
+            else if (bits_11_10 == 0x01) {
+                uint8_t bit_9 = (instr >> 9) & 0x01;
+
+                if (bit_9 == 0) {
+                    /* SUB: RA <- RA - RB */
+                    uint32_t result = (uint32_t)cpu->ra - cpu->rb;
+                    cpu->flags.carry = (cpu->ra < cpu->rb);
+                    cpu->ra = result & 0xFFFF;
+                    cycles = 6;
+                } else {
+                    /* Short shifts (SRS, SLS, SRR) - per Figure 2:
+                     * bit7=0: SRS (Short Right Shift)
+                     * bit7=1, bit4=0: SLS (Short Left Shift)
+                     * bit7=1, bit4=1: SRR (Short Right Rotate)
+                     */
+                    uint8_t bit_7 = (instr >> 7) & 0x01;
+                    uint8_t bit_4 = (instr >> 4) & 0x01;
+                    uint8_t shift_count = instr & 0x0F;
+                    if (shift_count == 0) shift_count = 16;
+
+                    if (bit_7 == 0) {
+                        /* SRS - Short Right Shift */
+                        cpu->ra >>= shift_count;
+                    } else if (bit_4 == 0) {
+                        /* SLS - Short Left Shift */
+                        cpu->ra <<= shift_count;
+                    } else {
+                        /* SRR - Short Right Rotate */
+                        cpu->ra = (cpu->ra >> shift_count) | (cpu->ra << (16 - shift_count));
+                    }
+                    cycles = 6;
+                }
             }
             /* Bits 11-10 = 10: SLC (Skip on Line Count) */
-            else if ((subop & 0x0C) == 0x08) {
-                /* Skip if line count matches */
-                /* TODO: Implement line count register */
+            else if (bits_11_10 == 0x02) {
+                /* Skip if line count matches - compares against I/O line count reg */
+                if (io != NULL) {
+                    uint16_t compare_val = instr & 0x00FF;
+                    if ((io->line_count & 0xFF) == compare_val) {
+                        next_pr = (cpu->pr + 2) & 0x0FFF;
+                    }
+                }
                 cycles = 6;
             }
-            /* Bits 11-10 = 11: Skip instructions */
-            else if ((subop & 0x0C) == 0x0C) {
-                uint8_t skip_type = (instr >> 4) & 0x07;
+            /* Bits 11-10 = 11: Skip instructions - bits 9-7 select type */
+            else if (bits_11_10 == 0x03) {
+                uint8_t skip_type = (instr >> 7) & 0x07;
                 bool skip = false;
 
+                /* Per JPL Figure 2:
+                 * 000 = SKP (Skip Positive)
+                 * 001 = DSP (Dec & Skip Positive)
+                 * 010 = SKZ (Skip Zero)
+                 * 011 = ISP (Inc & Skip Positive)
+                 * 100 = SKO (Skip Overflow)
+                 * 101 = DSZ (Dec & Skip Zero)
+                 * 110 = SKC (Skip Carry) - inferred
+                 * 111 = ISZ (Inc & Skip Zero)
+                 */
                 switch (skip_type) {
                 case 0: /* SKP - Skip on Positive */
                     skip = cpu->flags.positive;
                     cycles = 3;
                     break;
-                case 1: /* ISP - Increment & Skip on Positive */
-                    cpu->ra++;
-                    update_flags(cpu);
-                    skip = cpu->flags.positive;
-                    cycles = 4;
-                    break;
-                case 2: /* DSP - Decrement & Skip on Positive */
+                case 1: /* DSP - Decrement & Skip on Positive */
                     cpu->ra--;
                     update_flags(cpu);
                     skip = cpu->flags.positive;
                     cycles = 4;
                     break;
-                case 3: /* SKZ - Skip on Zero */
+                case 2: /* SKZ - Skip on Zero */
                     skip = cpu->flags.zero;
                     cycles = 3;
                     break;
-                case 4: /* ISZ - Increment & Skip on Zero */
+                case 3: /* ISP - Increment & Skip on Positive */
                     cpu->ra++;
                     update_flags(cpu);
-                    skip = cpu->flags.zero;
+                    skip = cpu->flags.positive;
                     cycles = 4;
+                    break;
+                case 4: /* SKO - Skip on Overflow */
+                    skip = cpu->flags.overflow;
+                    cpu->flags.overflow = false;  /* Clear after test */
+                    cycles = 3;
                     break;
                 case 5: /* DSZ - Decrement & Skip on Zero */
                     cpu->ra--;
@@ -624,15 +668,16 @@ int fds_cpu_step(fds_cpu_t *cpu, fds_io_t *io)
                     skip = cpu->flags.zero;
                     cycles = 4;
                     break;
-                case 6: /* SKO - Skip on Overflow */
-                    skip = cpu->flags.overflow;
-                    cpu->flags.overflow = false;  /* Clear after test */
-                    cycles = 3;
-                    break;
-                case 7: /* SKC - Skip on Carry */
+                case 6: /* SKC - Skip on Carry */
                     skip = cpu->flags.carry;
                     cpu->flags.carry = false;  /* Clear after test */
                     cycles = 3;
+                    break;
+                case 7: /* ISZ - Increment & Skip on Zero */
+                    cpu->ra++;
+                    update_flags(cpu);
+                    skip = cpu->flags.zero;
+                    cycles = 4;
                     break;
                 }
 
@@ -673,103 +718,114 @@ int fds_cpu_step(fds_cpu_t *cpu, fds_io_t *io)
         break;
 
     /* --------------------------------------------------------------------
-     * Short Shift Operations (1011)
-     * Cycles: 4-6 depending on shift count
-     * Operates on RA only (16-bit)
+     * MCX/SKE (1011) - per JPL MJS 2.64A Figure 2
+     * Bit 11 distinguishes: 0 = MCX, 1 = SKE
+     * MCX: Conditionally Modify Index - Cycles: 4
+     * SKE: Skip if Equal - Cycles: 3
      * -------------------------------------------------------------------- */
-    case FDS_OP_SHIFT_SHORT:
+    case FDS_OP_MCX_SKE:
         {
-            uint8_t shift_type = (instr >> 8) & 0x03;  /* Bits 9-8 */
-            uint8_t shift_count = instr & 0x0F;        /* Bits 3-0 */
-            if (shift_count == 0) shift_count = 16;    /* 0 means 16 */
+            bool is_ske = (instr & 0x0800) != 0;  /* Bit 11 */
 
-            switch (shift_type) {
-            case 0: /* SRS - Short Right Shift */
-                cpu->ra >>= shift_count;
-                break;
-            case 1: /* SLS - Short Left Shift */
-                cpu->ra <<= shift_count;
-                break;
-            case 2: /* SRR - Short Right Rotate */
-                cpu->ra = (cpu->ra >> shift_count) | (cpu->ra << (16 - shift_count));
-                break;
-            case 3: /* ARS - Short Arithmetic Right Shift */
-                {
-                    int16_t signed_ra = (int16_t)cpu->ra;
-                    signed_ra >>= shift_count;
-                    cpu->ra = (uint16_t)signed_ra;
+            if (is_ske) {
+                /* SKE - Skip if Equal */
+                uint8_t index_reg = (instr >> 8) & 0x07;  /* Which index register */
+                uint8_t compare_val = instr & 0xFF;       /* Value to compare */
+                uint16_t ir_addr = FDS_ADDR_SPECIAL_REG + index_reg;
+                uint16_t ir_value = fds_mem_read(cpu, ir_addr) & 0xFF;
+
+                if (ir_value == compare_val) {
+                    next_pr = (cpu->pr + 2) & 0x0FFF;  /* Skip next instruction */
                 }
-                break;
+                cycles = 3;
+            } else {
+                /* MCX - Conditionally Modify Index */
+                /* Modifies index register based on condition */
+                uint8_t index_reg = (instr >> 4) & 0x07;
+                uint16_t ir_addr = FDS_ADDR_SPECIAL_REG + index_reg;
+                uint16_t ir_value = fds_mem_read(cpu, ir_addr);
+
+                /* Increment or decrement based on instruction bits */
+                int8_t delta = (instr & 0x08) ? -1 : 1;
+                fds_mem_write(cpu, ir_addr, ir_value + delta);
+                cycles = 4;
             }
-            update_flags(cpu);
-            cycles = 4 + (shift_count / 4);  /* Approximate cycle count */
         }
         break;
 
     /* --------------------------------------------------------------------
-     * Long Shift Operations (1100)
-     * Cycles: 6-11 depending on shift count
+     * LRR (1100) - Long Right Rotate - per JPL MJS 2.64A Figure 2
+     * Cycles: 9
      * Operates on RA:RB as 32-bit value (RA=high, RB=low)
      * -------------------------------------------------------------------- */
-    case FDS_OP_SHIFT_LONG:
+    case FDS_OP_LRR:
         {
-            uint8_t shift_type = (instr >> 8) & 0x03;  /* Bits 9-8 */
             uint8_t shift_count = instr & 0x1F;        /* Bits 4-0 */
             if (shift_count == 0) shift_count = 32;    /* 0 means 32 */
 
             uint32_t combined = ((uint32_t)cpu->ra << 16) | cpu->rb;
-
-            switch (shift_type) {
-            case 0: /* LRS - Long Right Shift (Arithmetic) */
-                {
-                    int32_t signed_val = (int32_t)combined;
-                    signed_val >>= shift_count;
-                    combined = (uint32_t)signed_val;
-                }
-                break;
-            case 1: /* LLS - Long Left Shift */
-                combined <<= shift_count;
-                break;
-            case 2: /* LRR - Long Right Rotate */
-                combined = (combined >> shift_count) | (combined << (32 - shift_count));
-                break;
-            default:
-                /* Reserved */
-                break;
-            }
+            combined = (combined >> shift_count) | (combined << (32 - shift_count));
 
             cpu->ra = (combined >> 16) & 0xFFFF;
             cpu->rb = combined & 0xFFFF;
             update_flags(cpu);
-            cycles = 6 + (shift_count / 4);  /* Approximate cycle count */
+            cycles = 9;
         }
         break;
 
     /* --------------------------------------------------------------------
-     * MCX (1101) - Conditionally Modify Index
-     * Cycles: 2
+     * LLS (1101) - Long Left Shift - per JPL MJS 2.64A Figure 2
+     * Cycles: 9
+     * Operates on RA:RB as 32-bit value (RA=high, RB=low)
      * -------------------------------------------------------------------- */
-    case FDS_OP_MCX:
-        /* TODO: Implement conditional index modification */
-        cycles = 2;
+    case FDS_OP_LLS:
+        {
+            uint8_t shift_count = instr & 0x1F;        /* Bits 4-0 */
+            if (shift_count == 0) shift_count = 32;    /* 0 means 32 */
+
+            uint32_t combined = ((uint32_t)cpu->ra << 16) | cpu->rb;
+            combined <<= shift_count;
+
+            cpu->ra = (combined >> 16) & 0xFFFF;
+            cpu->rb = combined & 0xFFFF;
+            update_flags(cpu);
+            cycles = 9;
+        }
         break;
 
     /* --------------------------------------------------------------------
-     * SKE (1110) - Skip if Equal
-     * Cycles: 2
-     * Skip next instruction if index register equals value
+     * ARS/LRS (1110) - Arithmetic Right Shift - per JPL MJS 2.64A Figure 2
+     * ARS (short): Cycles 6, operates on RA only
+     * LRS (long): Cycles 9, operates on RA:RB as 32-bit
+     * Distinguished by shift count or other bits (need to verify exact encoding)
      * -------------------------------------------------------------------- */
-    case FDS_OP_SKE:
+    case FDS_OP_ARS_LRS:
         {
-            uint8_t index_reg = (instr >> 8) & 0x07;  /* Which index register */
-            uint8_t compare_val = instr & 0xFF;       /* Value to compare */
-            uint16_t ir_addr = FDS_ADDR_SPECIAL_REG + index_reg;
-            uint16_t ir_value = fds_mem_read(cpu, ir_addr) & 0xFF;
+            uint8_t shift_count = instr & 0x1F;        /* Bits 4-0 */
+            bool is_long = (instr & 0x0020) != 0;      /* Bit 5 might indicate long */
 
-            if (ir_value == compare_val) {
-                next_pr = (cpu->pr + 2) & 0x0FFF;  /* Skip next instruction */
+            if (shift_count == 0) {
+                shift_count = is_long ? 32 : 16;
             }
-            cycles = 2;
+
+            if (is_long || shift_count > 16) {
+                /* LRS - Long Arithmetic Right Shift */
+                uint32_t combined = ((uint32_t)cpu->ra << 16) | cpu->rb;
+                int32_t signed_val = (int32_t)combined;
+                signed_val >>= (shift_count > 32 ? 32 : shift_count);
+                combined = (uint32_t)signed_val;
+
+                cpu->ra = (combined >> 16) & 0xFFFF;
+                cpu->rb = combined & 0xFFFF;
+                cycles = 9;
+            } else {
+                /* ARS - Short Arithmetic Right Shift */
+                int16_t signed_ra = (int16_t)cpu->ra;
+                signed_ra >>= shift_count;
+                cpu->ra = (uint16_t)signed_ra;
+                cycles = 6;
+            }
+            update_flags(cpu);
         }
         break;
 
@@ -989,16 +1045,35 @@ const char *fds_disassemble(uint16_t instr, char *buf, size_t buflen)
         break;
     case FDS_OP_ALU:
         {
-            uint8_t subop = (instr >> 8) & 0x0F;
-            if ((subop & 0x0C) == 0x00) {
-                uint8_t aluop = (instr >> 4) & 0x03;
+            uint8_t bits_11_10 = (instr >> 10) & 0x03;
+            uint8_t bits_9_8 = (instr >> 8) & 0x03;
+
+            if (bits_11_10 == 0x00) {
                 const char *ops[] = {"ADD", "LXR", "AND", "LOR"};
-                snprintf(buf, buflen, "%s", ops[aluop]);
-            } else if ((subop & 0x0E) == 0x04) {
-                snprintf(buf, buflen, "SUB");
-            } else if ((subop & 0x0C) == 0x0C) {
-                uint8_t skip_type = (instr >> 4) & 0x07;
-                const char *skips[] = {"SKP", "ISP", "DSP", "SKZ", "ISZ", "DSZ", "SKO", "SKC"};
+                snprintf(buf, buflen, "%s", ops[bits_9_8]);
+            } else if (bits_11_10 == 0x01) {
+                uint8_t bit_9 = (instr >> 9) & 0x01;
+                if (bit_9 == 0) {
+                    snprintf(buf, buflen, "SUB");
+                } else {
+                    /* Short shifts */
+                    uint8_t bit_7 = (instr >> 7) & 0x01;
+                    uint8_t bit_4 = (instr >> 4) & 0x01;
+                    uint8_t cnt = instr & 0x0F;
+                    if (cnt == 0) cnt = 16;
+                    if (bit_7 == 0) {
+                        snprintf(buf, buflen, "SRS  %d", cnt);
+                    } else if (bit_4 == 0) {
+                        snprintf(buf, buflen, "SLS  %d", cnt);
+                    } else {
+                        snprintf(buf, buflen, "SRR  %d", cnt);
+                    }
+                }
+            } else if (bits_11_10 == 0x02) {
+                snprintf(buf, buflen, "SLC  %02X", instr & 0xFF);
+            } else if (bits_11_10 == 0x03) {
+                uint8_t skip_type = (instr >> 7) & 0x07;
+                const char *skips[] = {"SKP", "DSP", "SKZ", "ISP", "SKO", "DSZ", "SKC", "ISZ"};
                 snprintf(buf, buflen, "%s", skips[skip_type]);
             } else {
                 snprintf(buf, buflen, "ALU? %04X", instr);
@@ -1010,29 +1085,34 @@ const char *fds_disassemble(uint16_t instr, char *buf, size_t buflen)
                  (instr & 0x0800) ? "AMR" : "AML",
                  (instr >> 4) & 0x1F);
         break;
-    case FDS_OP_SHIFT_SHORT:
-        {
-            uint8_t shift_type = (instr >> 8) & 0x03;
-            uint8_t shift_count = instr & 0x0F;
-            if (shift_count == 0) shift_count = 16;
-            const char *ops[] = {"SRS", "SLS", "SRR", "ARS"};
-            snprintf(buf, buflen, "%s  %d", ops[shift_type], shift_count);
+    case FDS_OP_MCX_SKE:
+        if (instr & 0x0800) {
+            snprintf(buf, buflen, "SKE  IR%d,%02X", (instr >> 8) & 0x07, instr & 0xFF);
+        } else {
+            snprintf(buf, buflen, "MCX  IR%d", (instr >> 4) & 0x07);
         }
         break;
-    case FDS_OP_SHIFT_LONG:
+    case FDS_OP_LRR:
         {
-            uint8_t shift_type = (instr >> 8) & 0x03;
             uint8_t shift_count = instr & 0x1F;
             if (shift_count == 0) shift_count = 32;
-            const char *ops[] = {"LRS", "LLS", "LRR", "???"};
-            snprintf(buf, buflen, "%s  %d", ops[shift_type], shift_count);
+            snprintf(buf, buflen, "LRR  %d", shift_count);
         }
         break;
-    case FDS_OP_MCX:
-        snprintf(buf, buflen, "MCX  %03X", addr);
+    case FDS_OP_LLS:
+        {
+            uint8_t shift_count = instr & 0x1F;
+            if (shift_count == 0) shift_count = 32;
+            snprintf(buf, buflen, "LLS  %d", shift_count);
+        }
         break;
-    case FDS_OP_SKE:
-        snprintf(buf, buflen, "SKE  IR%d,%02X", (instr >> 8) & 0x07, instr & 0xFF);
+    case FDS_OP_ARS_LRS:
+        {
+            uint8_t shift_count = instr & 0x1F;
+            bool is_long = (instr & 0x0020) != 0;
+            if (shift_count == 0) shift_count = is_long ? 32 : 16;
+            snprintf(buf, buflen, "%s  %d", is_long ? "LRS" : "ARS", shift_count);
+        }
         break;
     case FDS_OP_OUT:
         {

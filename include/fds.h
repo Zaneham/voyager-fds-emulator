@@ -122,7 +122,7 @@
 #define FDS_OPCODE_MASK      0xF000
 #define FDS_OPCODE_SHIFT     12
 
-/* Primary opcodes (bits 15-12) */
+/* Primary opcodes (bits 15-12) - per JPL MJS 2.64A Figure 2 */
 typedef enum {
     FDS_OP_JMP  = 0x0,   /* 0000 - Jump */
     FDS_OP_SRB  = 0x1,   /* 0001 - Save RB Register */
@@ -131,14 +131,14 @@ typedef enum {
     FDS_OP_MLD  = 0x4,   /* 0100 - Load Memory */
     FDS_OP_MRD  = 0x5,   /* 0101 - Read Memory */
     FDS_OP_SWI  = 0x6,   /* 0110 - Serial Data In */
-    FDS_OP_SWO  = 0x7,   /* 0111 - Serial Data Out / Parallel Transfer */
+    FDS_OP_SWO  = 0x7,   /* 0111 - Serial Data Out (bit11=0) / Parallel (bit11=1) */
     FDS_OP_ABS  = 0x8,   /* 1000 - Absolute Entry */
-    FDS_OP_ALU  = 0x9,   /* 1001 - ALU ops (ADD, LXR, AND, LOR, SUB, SKP, etc.) */
-    FDS_OP_AUTO = 0xA,   /* 1010 - Auto Index Memory Load/Read (AML, AMR) */
-    FDS_OP_SHIFT_SHORT = 0xB,  /* 1011 - Short shifts (SRS, SLS, SRR, ARS) */
-    FDS_OP_SHIFT_LONG  = 0xC,  /* 1100 - Long shifts (LRS, LLS, LRR) */
-    FDS_OP_MCX  = 0xD,   /* 1101 - Conditionally Modify Index */
-    FDS_OP_SKE  = 0xE,   /* 1110 - Skip if Equal */
+    FDS_OP_ALU  = 0x9,   /* 1001 - ALU ops (ADD/LXR/AND/LOR/SUB/SLC/SKP/shifts) */
+    FDS_OP_AUTO = 0xA,   /* 1010 - Auto Index Memory (AML bit11=0, AMR bit11=1) */
+    FDS_OP_MCX_SKE = 0xB,  /* 1011 - MCX (bit11=0) or SKE (bit11=1) */
+    FDS_OP_LRR  = 0xC,   /* 1100 - Long Right Rotate */
+    FDS_OP_LLS  = 0xD,   /* 1101 - Long Left Shift */
+    FDS_OP_ARS_LRS = 0xE,  /* 1110 - Arithmetic Right Shift (short/long) */
     FDS_OP_OUT  = 0xF,   /* 1111 - Discrete Output */
 } fds_opcode_t;
 
