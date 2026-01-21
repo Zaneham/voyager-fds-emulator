@@ -1,0 +1,68 @@
+; FDS DMA Test Program
+; Tests DMA channel control via OUT instruction
+;
+; DMA Control Codes:
+;   OUT $08+ch: Enable DMA channel
+;   OUT $0C+ch: Disable DMA channel
+;   OUT $10+ch: Set direction to OUTPUT (mem->I/O)
+;   OUT $14+ch: Set direction to INPUT (I/O->mem)
+;   OUT $18+ch: Load DMA address from RA
+
+        ORG     $000
+
+START:
+        ; === Test DMA Channel 0 (MDS - Telemetry) ===
+
+        ; Set up DMA address from RA
+        MLD     DMA_ADDR        ; Load starting address $100
+        OUT     $18             ; DMAAD MDS - Load address for channel 0
+
+        ; Set direction to OUTPUT (memory -> I/O)
+        OUT     $10             ; DMAOU MDS - Set output direction
+
+        ; Enable DMA channel 0
+        OUT     $08             ; DMAEN MDS - Enable channel
+
+        ; DMA will now transfer data from $100 onwards to MDS
+        ; (transfers happen automatically during instruction execution)
+
+        ; Wait a bit (DMA transfers happen during each instruction)
+        MLD     TEST_VAL1       ; Some instructions to allow DMA
+        MRD     TEMP1
+        MLD     TEST_VAL2
+        MRD     TEMP2
+
+        ; Disable DMA channel 0
+        OUT     $0C             ; DMADI MDS - Disable channel
+
+        ; === Test DMA Channel 2 (ISS - Imaging) ===
+
+        ; Set up for ISS input
+        MLD     ISS_ADDR        ; Load address $200 for ISS data
+        OUT     $1A             ; DMAAD ISS - Load address for channel 2
+
+        ; Set direction to INPUT (I/O -> memory)
+        OUT     $16             ; DMAIN ISS - Set input direction
+
+        ; Enable ISS channel
+        OUT     $0A             ; DMAEN ISS - Enable channel
+
+        ; Let some DMA happen
+        MLD     TEST_VAL1
+        MRD     TEMP1
+
+        ; Disable ISS channel
+        OUT     $0E             ; DMADI ISS - Disable channel
+
+        ; Halt
+        WAT     $FFF
+
+; Test data
+DMA_ADDR:   DW  $100           ; DMA starting address
+ISS_ADDR:   DW  $200           ; ISS buffer address
+TEST_VAL1:  DW  $AAAA
+TEST_VAL2:  DW  $5555
+TEMP1:      DW  $0000
+TEMP2:      DW  $0000
+
+        END

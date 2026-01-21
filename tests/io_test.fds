@@ -1,0 +1,45 @@
+; FDS I/O Test Program
+; Tests SWI, SWO, and PWD instructions
+;
+; Note: Without actual I/O hardware, these will read/write to
+; the internal I/O port buffers or return 0.
+
+        ORG     $000
+
+START:
+        ; Test 1: Serial Word Out - send data to channel 0
+        MLD     TEST_VAL        ; Load test value $1234
+        SWO     0               ; Serial out to channel 0
+
+        ; Test 2: Serial Word Out - send to channel 5
+        MLD     TEST_VAL2       ; Load test value $5678
+        SWO     5               ; Serial out to channel 5
+
+        ; Test 3: Serial Word In - read from channel 0
+        ; (Will read 0 without hardware)
+        SWI     0               ; Serial in from channel 0
+        MRD     RESULT1         ; Store result
+
+        ; Test 4: Serial Word In - read from channel 15
+        SWI     15              ; Serial in from channel 15
+        MRD     RESULT2         ; Store result
+
+        ; Test 5: Parallel Word Out - send to parallel channel 2
+        MLD     TEST_VAL        ; Reload test value
+        PWD     $402            ; PWD OUT (bit 10=1), channel 2
+
+        ; Test 6: Parallel Word In - read from parallel channel 3
+        PWD     $003            ; PWD IN (bit 10=0), channel 3
+        MRD     RESULT3         ; Store result
+
+        ; Halt
+        WAT     $FFF
+
+; Test data
+TEST_VAL:   DW  $1234
+TEST_VAL2:  DW  $5678
+RESULT1:    DW  $DEAD
+RESULT2:    DW  $BEEF
+RESULT3:    DW  $CAFE
+
+        END

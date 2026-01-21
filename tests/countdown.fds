@@ -1,0 +1,19 @@
+; countdown.fds - FDS Assembly Test Program
+; Counts down from 10 to 0, then halts
+;
+; Based on Figure 2 instruction encodings
+; JPL Memo MJS 2.64A, 7 October 1974
+
+        ORG     $000        ; Start at address 0
+
+START:  MLD     VALUE       ; Load initial value (10) into RA
+LOOP:   DSZ                 ; Decrement RA, skip if zero
+        JMP     LOOP        ; Not zero, continue looping
+        MRD     RESULT      ; Store final value (0)
+        WAT     $000        ; Halt
+
+; Data section
+VALUE:  DW      $000A       ; Initial value = 10
+RESULT: DW      $0000       ; Result storage
+
+        END

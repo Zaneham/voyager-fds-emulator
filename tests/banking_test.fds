@@ -1,0 +1,36 @@
+; FDS Memory Banking Test
+; Tests SETAU/SETAD instructions for data banking
+; Per MJS77-4-2006-1A specification
+
+        ORG     $000
+
+START:
+        ; First: Store $AA55 at address $100 (lower bank)
+        MLD     VAL1        ; Load $AA55 into RA
+        MRD     $100        ; Store at $100 (lower bank)
+
+        ; Second: Load value, switch to upper, then store
+        MLD     VAL2        ; Load $55AA into RA (while still in lower bank)
+        OUT     $03         ; SETAU - switch to upper bank
+        MRD     $100        ; Store at $100 (goes to $1100 in upper bank)
+
+        ; Now verify both banks have different values
+        ; Read from upper bank (currently in upper mode)
+        MLD     $100        ; Load from $1100 (upper bank)
+        OUT     $04         ; SETAD - switch back to lower
+        MRD     RESULT2     ; Save upper bank result (to lower)
+
+        ; Read from lower bank
+        MLD     $100        ; Load from $100 (lower bank)
+        MRD     RESULT1     ; Save lower bank result
+
+        ; Halt - check RESULT1=$AA55, RESULT2=$55AA
+        WAT     $FFF
+
+; Data values - put after halt so addresses are predictable
+VAL1:       DW  $AA55       ; Test pattern 1 (at $00D)
+VAL2:       DW  $55AA       ; Test pattern 2 (at $00E)
+RESULT1:    DW  $DEAD       ; Lower bank result (at $00F) - expect $AA55
+RESULT2:    DW  $BEEF       ; Upper bank result (at $010) - expect $55AA
+
+        END
