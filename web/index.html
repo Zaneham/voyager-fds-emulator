@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voyager FDS Emulator | Flight Data Subsystem</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+
+        :root {
+            --phosphor: #33ff33;
+            --phosphor-dim: #22aa22;
+            --phosphor-glow: #44ff44;
+            --phosphor-bright: #aaffaa;
+            --crt-dark: #0a0f0a;
+            --crt-screen: #050805;
+            --bezel: #1a1a1a;
+            --bezel-light: #2a2a2a;
+            --gold: #d4af37;
+            --gold-dim: #a08020;
+            --gold-bright: #ffd700;
+            --warning: #ff6b4a;
+            --space: #000005;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background: var(--space);
+            color: var(--phosphor);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Starfield */
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 3s ease-in-out infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 30px 20px;
+            border-bottom: 1px solid var(--phosphor-dim);
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .mission-badge {
+            display: inline-block;
+            border: 2px solid var(--gold);
+            padding: 8px 20px;
+            margin-bottom: 15px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            letter-spacing: 0.3em;
+            color: var(--gold);
+            background: rgba(212, 175, 55, 0.1);
+        }
+
+        .title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            text-shadow:
+                0 0 10px var(--phosphor-glow),
+                0 0 20px var(--phosphor-glow),
+                0 0 40px rgba(51, 255, 51, 0.3);
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 0.9rem;
+            color: var(--phosphor-dim);
+            letter-spacing: 0.1em;
+        }
+
+        /* Distance Counter */
+        .distance-display {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--crt-dark);
+            border: 1px solid var(--gold-dim);
+            display: inline-block;
+        }
+
+        .distance-label {
+            font-size: 0.7rem;
+            color: var(--gold);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .distance-value {
+            font-family: 'VT323', monospace;
+            font-size: 1.8rem;
+            color: var(--gold-bright);
+            text-shadow: 0 0 10px var(--gold);
+        }
+
+        .distance-unit {
+            font-size: 0.8rem;
+            color: var(--gold-dim);
+            margin-left: 5px;
+        }
+
+        .signal-delay {
+            font-size: 0.75rem;
+            color: var(--phosphor-dim);
+            margin-top: 8px;
+        }
+
+        /* Main Layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+
+        /* CRT Screen Effect */
+        .crt-panel {
+            background: var(--crt-screen);
+            border: 3px solid var(--bezel);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            box-shadow:
+                inset 0 0 100px rgba(0,0,0,0.5),
+                0 0 20px rgba(51, 255, 51, 0.1);
+        }
+
+        .crt-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15) 0px,
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .crt-panel::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(
+                ellipse at center,
+                transparent 0%,
+                rgba(0, 0, 0, 0.2) 80%,
+                rgba(0, 0, 0, 0.4) 100%
+            );
+            pointer-events: none;
+            z-index: 11;
+        }
+
+        /* Panel Headers */
+        .panel-header {
+            background: var(--bezel);
+            padding: 8px 15px;
+            font-size: 0.75rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--phosphor-dim);
+            border-bottom: 1px solid var(--bezel-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-light {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--phosphor-dim);
+            box-shadow: 0 0 5px var(--phosphor-dim);
+        }
+
+        .status-light.active {
+            background: var(--phosphor);
+            box-shadow: 0 0 10px var(--phosphor-glow);
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        .status-light.gold {
+            background: var(--gold-dim);
+        }
+
+        .status-light.gold.active {
+            background: var(--gold);
+            box-shadow: 0 0 10px var(--gold);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Editor */
+        .editor-section {
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+        }
+
+        .code-editor {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--phosphor);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 15px;
+            resize: none;
+            outline: none;
+            position: relative;
+            z-index: 5;
+        }
+
+        .code-editor::placeholder {
+            color: var(--phosphor-dim);
+            opacity: 0.5;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            background: var(--bezel);
+            padding: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            border-top: 1px solid var(--bezel-light);
+            align-items: center;
+        }
+
+        .btn {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            padding: 8px 16px;
+            background: var(--crt-dark);
+            color: var(--phosphor);
+            border: 1px solid var(--phosphor-dim);
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            transition: all 0.15s ease;
+        }
+
+        .btn:hover {
+            background: var(--phosphor-dim);
+            color: var(--crt-dark);
+            box-shadow: 0 0 15px rgba(51, 255, 51, 0.3);
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn.primary {
+            background: var(--phosphor);
+            color: var(--crt-dark);
+            border-color: var(--phosphor);
+        }
+
+        .btn.primary:hover {
+            background: var(--phosphor-bright);
+            box-shadow: 0 0 20px rgba(51, 255, 51, 0.5);
+        }
+
+        .btn.danger {
+            border-color: var(--warning);
+            color: var(--warning);
+        }
+
+        .btn.danger:hover {
+            background: var(--warning);
+            color: var(--crt-dark);
+        }
+
+        .examples-select {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            padding: 8px 12px;
+            background: var(--crt-dark);
+            color: var(--phosphor);
+            border: 1px solid var(--phosphor-dim);
+            cursor: pointer;
+            outline: none;
+            margin-left: auto;
+        }
+
+        .examples-select option {
+            background: var(--crt-dark);
+        }
+
+        /* Right Panel */
+        .state-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .state-section {
+            background: var(--crt-screen);
+            border: 2px solid var(--bezel);
+            border-radius: 6px;
+        }
+
+        .state-content {
+            padding: 12px;
+            font-size: 0.9rem;
+        }
+
+        /* Registers */
+        .register-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .register {
+            background: rgba(51, 255, 51, 0.05);
+            padding: 8px;
+            border-left: 3px solid var(--phosphor-dim);
+        }
+
+        .register-name {
+            font-size: 0.7rem;
+            color: var(--phosphor-dim);
+            letter-spacing: 0.1em;
+        }
+
+        .register-value {
+            font-family: 'VT323', monospace;
+            font-size: 1.3rem;
+            color: var(--phosphor);
+        }
+
+        /* Flags */
+        .flags-row {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--bezel-light);
+        }
+
+        .flag {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.75rem;
+            color: var(--phosphor-dim);
+        }
+
+        .flag-indicator {
+            width: 10px;
+            height: 10px;
+            border: 1px solid var(--phosphor-dim);
+            background: transparent;
+        }
+
+        .flag-indicator.active {
+            background: var(--phosphor);
+            box-shadow: 0 0 5px var(--phosphor);
+        }
+
+        /* Memory Display */
+        .memory-content {
+            font-family: 'VT323', monospace;
+            font-size: 0.85rem;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .memory-row {
+            display: flex;
+            padding: 2px 0;
+        }
+
+        .memory-addr {
+            color: var(--gold-dim);
+            width: 50px;
+        }
+
+        .memory-value {
+            color: var(--phosphor);
+        }
+
+        .memory-value.highlight {
+            background: rgba(51, 255, 51, 0.2);
+        }
+
+        /* Output Console */
+        .output-content {
+            font-family: 'VT323', monospace;
+            font-size: 1rem;
+            min-height: 60px;
+            max-height: 100px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .output-line.error {
+            color: var(--warning);
+        }
+
+        /* DMA Status */
+        .dma-channels {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+        }
+
+        .dma-channel {
+            text-align: center;
+            padding: 8px 4px;
+            background: rgba(51, 255, 51, 0.03);
+            border: 1px solid var(--bezel-light);
+        }
+
+        .dma-name {
+            font-size: 0.65rem;
+            color: var(--phosphor-dim);
+            letter-spacing: 0.1em;
+        }
+
+        .dma-status {
+            margin-top: 4px;
+        }
+
+        /* Instruction Reference */
+        .instruction-ref {
+            font-size: 0.65rem;
+            line-height: 1.5;
+            columns: 2;
+            column-gap: 15px;
+            color: var(--phosphor-dim);
+        }
+
+        .instruction-ref code {
+            color: var(--phosphor);
+            background: rgba(51, 255, 51, 0.1);
+            padding: 1px 3px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 30px 20px;
+            margin-top: 30px;
+            border-top: 1px solid var(--bezel);
+            color: var(--phosphor-dim);
+            font-size: 0.8rem;
+        }
+
+        .footer a {
+            color: var(--gold);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .footer .tagline {
+            margin-top: 15px;
+            font-style: italic;
+            opacity: 0.6;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--crt-dark);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--phosphor-dim);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--phosphor);
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .editor-section {
+                height: 400px;
+            }
+
+            .title {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="stars" id="stars"></div>
+
+    <div class="container">
+        <header class="header">
+            <div class="mission-badge">MARINER JUPITER-SATURN '77</div>
+            <h1 class="title">VOYAGER FDS</h1>
+            <p class="subtitle">Flight Data Subsystem Emulator • 806.4 kHz • 8K × 16-bit CMOS</p>
+
+            <div class="distance-display">
+                <div class="distance-label">Voyager 1 Current Distance</div>
+                <div>
+                    <span class="distance-value" id="distance">24,596,234,112</span>
+                    <span class="distance-unit">km</span>
+                </div>
+                <div class="signal-delay">Signal delay: <span id="signal-delay">22h 51m</span> one-way</div>
+            </div>
+        </header>
+
+        <main class="main-grid">
+            <!-- Left: Code Editor -->
+            <div class="editor-section crt-panel">
+                <div class="panel-header">
+                    <span>◈ FDS Assembly</span>
+                    <div class="status-light" id="editor-light"></div>
+                </div>
+                <textarea class="code-editor" id="editor" placeholder="; Voyager FDS Assembly
+;
+; Registers: RA (accumulator), RB (auxiliary)
+; Memory: 8K words, 16-bit, banked
+;
+; Example - countdown from 10:
+;     MLD  COUNT     ; Load counter
+; LOOP:
+;     MRD  TEMP      ; Store current
+;     SUB  ONE       ; Decrement
+;     SKZ            ; Skip if zero
+;     JMP  LOOP      ; Continue
+;     WAT  $FFF      ; Halt
+;
+; COUNT: DW $000A
+; ONE:   DW $0001
+; TEMP:  DW $0000"></textarea>
+                <div class="control-panel">
+                    <button class="btn primary" onclick="runProgram()">▶ RUN</button>
+                    <button class="btn" onclick="stepProgram()">⏭ STEP</button>
+                    <button class="btn danger" onclick="resetCPU()">⟲ RESET</button>
+                    <select class="examples-select" id="examples" onchange="loadExample()">
+                        <option value="">Load Example...</option>
+                        <option value="countdown">Countdown from 10</option>
+                        <option value="add">Add Two Numbers</option>
+                        <option value="multiply">Multiply (Repeated Add)</option>
+                        <option value="banking">Memory Banking Demo</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Right: State Panel -->
+            <div class="state-panel">
+                <!-- Registers -->
+                <div class="state-section">
+                    <div class="panel-header">
+                        <span>◈ Registers</span>
+                        <div class="status-light gold" id="cpu-light"></div>
+                    </div>
+                    <div class="state-content">
+                        <div class="register-grid">
+                            <div class="register">
+                                <div class="register-name">RA (Accumulator)</div>
+                                <div class="register-value" id="reg-ra">0000</div>
+                            </div>
+                            <div class="register">
+                                <div class="register-name">RB (Auxiliary)</div>
+                                <div class="register-value" id="reg-rb">0000</div>
+                            </div>
+                            <div class="register">
+                                <div class="register-name">PC (Program Counter)</div>
+                                <div class="register-value" id="reg-pc">000</div>
+                            </div>
+                            <div class="register">
+                                <div class="register-name">Cycles</div>
+                                <div class="register-value" id="reg-cycles">0</div>
+                            </div>
+                        </div>
+                        <div class="flags-row">
+                            <div class="flag">
+                                <div class="flag-indicator" id="flag-z"></div>
+                                <span>ZERO</span>
+                            </div>
+                            <div class="flag">
+                                <div class="flag-indicator" id="flag-o"></div>
+                                <span>OVFL</span>
+                            </div>
+                            <div class="flag">
+                                <div class="flag-indicator" id="flag-c"></div>
+                                <span>CARRY</span>
+                            </div>
+                            <div class="flag">
+                                <div class="flag-indicator" id="flag-au"></div>
+                                <span>BANK</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memory View -->
+                <div class="state-section">
+                    <div class="panel-header">
+                        <span>◈ Memory</span>
+                    </div>
+                    <div class="state-content memory-content" id="memory-display">
+                        <div class="memory-row"><span class="memory-addr">000:</span> <span class="memory-value">0000 0000 0000 0000</span></div>
+                    </div>
+                </div>
+
+                <!-- Output -->
+                <div class="state-section">
+                    <div class="panel-header">
+                        <span>◈ Output</span>
+                        <div class="status-light" id="output-light"></div>
+                    </div>
+                    <div class="state-content output-content" id="output-display"></div>
+                </div>
+
+                <!-- DMA Channels -->
+                <div class="state-section">
+                    <div class="panel-header">
+                        <span>◈ DMA Channels</span>
+                    </div>
+                    <div class="state-content">
+                        <div class="dma-channels">
+                            <div class="dma-channel">
+                                <div class="dma-name">MDS</div>
+                                <div class="dma-status"><div class="status-light" id="dma-mds"></div></div>
+                            </div>
+                            <div class="dma-channel">
+                                <div class="dma-name">DSS</div>
+                                <div class="dma-status"><div class="status-light" id="dma-dss"></div></div>
+                            </div>
+                            <div class="dma-channel">
+                                <div class="dma-name">ISS</div>
+                                <div class="dma-status"><div class="status-light" id="dma-iss"></div></div>
+                            </div>
+                            <div class="dma-channel">
+                                <div class="dma-name">PRA</div>
+                                <div class="dma-status"><div class="status-light" id="dma-pra"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Reference -->
+                <div class="state-section">
+                    <div class="panel-header">
+                        <span>◈ Instructions</span>
+                    </div>
+                    <div class="state-content instruction-ref">
+                        <div><code>MLD</code> Load mem→RA</div>
+                        <div><code>MRD</code> Store RA→mem</div>
+                        <div><code>ADD</code> RA + mem</div>
+                        <div><code>SUB</code> RA - mem</div>
+                        <div><code>AND</code> RA & mem</div>
+                        <div><code>JMP</code> Jump</div>
+                        <div><code>SKZ</code> Skip if zero</div>
+                        <div><code>SKP</code> Skip if +</div>
+                        <div><code>WAT</code> Halt</div>
+                        <div><code>DW</code> Define word</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <div>
+                <a href="https://github.com/Zaneham/voyager-fds-emulator">GitHub</a>
+                &nbsp;•&nbsp;
+                <a href="https://github.com/Zaneham/Viking-Marsrover-emulator">Viking Emulator</a>
+                &nbsp;•&nbsp;
+                <a href="https://github.com/Zaneham/setun70-emulator">Setun-70 Emulator</a>
+            </div>
+            <p class="tagline">
+                "Voyager's last software update was in 1990. Thirty-five years of continuous operation,
+                24 billion kilometres from the nearest patch."
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // =============================================================================
+        // STARFIELD
+        // =============================================================================
+
+        function createStars() {
+            const container = document.getElementById('stars');
+            const count = 150;
+
+            for (let i = 0; i < count; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.width = star.style.height = (Math.random() * 2 + 1) + 'px';
+                star.style.animationDelay = Math.random() * 3 + 's';
+                star.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                container.appendChild(star);
+            }
+        }
+
+        // =============================================================================
+        // VOYAGER DISTANCE CALCULATOR
+        // =============================================================================
+
+        function updateVoyagerDistance() {
+            // Voyager 1 launch: Sept 5, 1977
+            // Approximate current distance and velocity
+            // As of 2024, roughly 24.5 billion km, moving at ~17 km/s
+
+            const launchDate = new Date('1977-09-05T12:56:00Z');
+            const now = new Date();
+            const secondsSinceLaunch = (now - launchDate) / 1000;
+
+            // Rough approximation: 17.1 km/s average velocity
+            const distanceKm = 14000000000 + (secondsSinceLaunch * 17.1);
+
+            // Format with commas
+            const formatted = Math.floor(distanceKm).toLocaleString();
+            document.getElementById('distance').textContent = formatted;
+
+            // Signal delay (speed of light: 299,792 km/s)
+            const delaySeconds = distanceKm / 299792;
+            const hours = Math.floor(delaySeconds / 3600);
+            const minutes = Math.floor((delaySeconds % 3600) / 60);
+            document.getElementById('signal-delay').textContent = `${hours}h ${minutes}m`;
+        }
+
+        // =============================================================================
+        // FDS EMULATOR
+        // =============================================================================
+
+        class FDSEmulator {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.memory = new Uint16Array(8192);  // 8K words
+                this.ra = 0;      // Accumulator A
+                this.rb = 0;      // Accumulator B
+                this.pc = 0;      // Program counter
+                this.cycles = 0;
+                this.running = false;
+                this.halted = false;
+
+                // Flags
+                this.zero = false;
+                this.overflow = false;
+                this.carry = false;
+                this.addressUpper = false;  // Memory bank
+                this.jumpUpper = false;
+
+                // DMA channels
+                this.dma = [
+                    { enabled: false, name: 'MDS' },
+                    { enabled: false, name: 'DSS' },
+                    { enabled: false, name: 'ISS' },
+                    { enabled: false, name: 'PRA' }
+                ];
+
+                this.output = [];
+                this.error = null;
+            }
+
+            updateFlags() {
+                this.zero = (this.ra === 0);
+                this.overflow = false;  // Simplified
+                this.carry = false;
+            }
+
+            getEffectiveAddress(addr) {
+                addr = addr & 0xFFF;  // 12-bit address
+                if (this.addressUpper && addr < 0xF80) {
+                    return addr + 0x1000;  // Upper bank
+                }
+                return addr;
+            }
+
+            step() {
+                if (this.halted || this.pc >= this.memory.length) {
+                    this.running = false;
+                    return false;
+                }
+
+                const instr = this.memory[this.pc];
+                const opcode = (instr >> 12) & 0xF;
+                const addr = instr & 0xFFF;
+
+                this.pc++;
+                this.cycles++;
+
+                switch (opcode) {
+                    case 0x0:  // JMP
+                        this.pc = addr;
+                        break;
+
+                    case 0x1:  // SRB - Subroutine
+                        this.rb = this.pc;
+                        this.pc = addr;
+                        break;
+
+                    case 0x2:  // MLD - Memory Load
+                        this.ra = this.memory[this.getEffectiveAddress(addr)];
+                        this.updateFlags();
+                        break;
+
+                    case 0x3:  // MRD - Memory Store
+                        this.memory[this.getEffectiveAddress(addr)] = this.ra;
+                        break;
+
+                    case 0x4:  // ADD
+                        this.ra = (this.ra + this.memory[this.getEffectiveAddress(addr)]) & 0xFFFF;
+                        this.updateFlags();
+                        break;
+
+                    case 0x5:  // SUB
+                        this.ra = (this.ra - this.memory[this.getEffectiveAddress(addr)]) & 0xFFFF;
+                        this.updateFlags();
+                        break;
+
+                    case 0x6:  // AND
+                        this.ra = this.ra & this.memory[this.getEffectiveAddress(addr)];
+                        this.updateFlags();
+                        break;
+
+                    case 0x7:  // SKP - Skip if positive
+                        if ((this.ra & 0x8000) === 0 && this.ra !== 0) {
+                            this.pc++;
+                        }
+                        break;
+
+                    case 0x8:  // SKZ - Skip if zero
+                        if (this.zero) {
+                            this.pc++;
+                        }
+                        break;
+
+                    case 0x9:  // WAT - Wait/Halt
+                        this.halted = true;
+                        this.running = false;
+                        break;
+
+                    case 0xA:  // OUT - Output RA
+                        this.output.push(`OUT: ${this.ra.toString(16).toUpperCase().padStart(4, '0')} (${this.ra})`);
+                        break;
+
+                    case 0xB:  // SETAU - Set address upper
+                        this.addressUpper = true;
+                        break;
+
+                    case 0xC:  // SETAD - Set address down
+                        this.addressUpper = false;
+                        break;
+
+                    default:
+                        this.error = `Unknown opcode: ${opcode.toString(16)}`;
+                        this.running = false;
+                }
+
+                return this.running;
+            }
+
+            run(maxCycles = 10000) {
+                this.running = true;
+                this.halted = false;
+                let count = 0;
+
+                while (this.running && count < maxCycles) {
+                    this.step();
+                    count++;
+                }
+
+                if (count >= maxCycles) {
+                    this.error = 'Max cycles exceeded (infinite loop?)';
+                }
+            }
+        }
+
+        // =============================================================================
+        // ASSEMBLER
+        // =============================================================================
+
+        function assemble(source) {
+            const lines = source.split('\n');
+            const labels = {};
+            const instructions = [];
+            let addr = 0;
+
+            // First pass: collect labels
+            for (const line of lines) {
+                const cleaned = line.split(';')[0].trim();
+                if (!cleaned) continue;
+
+                // Check for label
+                const labelMatch = cleaned.match(/^(\w+):\s*(.*)/);
+                if (labelMatch) {
+                    labels[labelMatch[1].toUpperCase()] = addr;
+                    const rest = labelMatch[2].trim();
+                    if (rest) addr++;
+                } else {
+                    addr++;
+                }
+            }
+
+            // Second pass: assemble
+            addr = 0;
+            for (const line of lines) {
+                const cleaned = line.split(';')[0].trim();
+                if (!cleaned) continue;
+
+                let code = cleaned;
+                if (code.includes(':')) {
+                    code = code.split(':')[1].trim();
+                }
+                if (!code) continue;
+
+                const parts = code.toUpperCase().split(/\s+/);
+                const mnemonic = parts[0];
+                let operand = parts[1] || '0';
+
+                // Resolve label or parse number
+                let value = 0;
+                if (labels[operand] !== undefined) {
+                    value = labels[operand];
+                } else if (operand.startsWith('$')) {
+                    value = parseInt(operand.slice(1), 16);
+                } else {
+                    value = parseInt(operand, 10) || 0;
+                }
+                value = value & 0xFFF;
+
+                let word = 0;
+                switch (mnemonic) {
+                    case 'JMP':  word = 0x0000 | value; break;
+                    case 'SRB':  word = 0x1000 | value; break;
+                    case 'MLD':  word = 0x2000 | value; break;
+                    case 'MRD':  word = 0x3000 | value; break;
+                    case 'ADD':  word = 0x4000 | value; break;
+                    case 'SUB':  word = 0x5000 | value; break;
+                    case 'AND':  word = 0x6000 | value; break;
+                    case 'SKP':  word = 0x7000; break;
+                    case 'SKZ':  word = 0x8000; break;
+                    case 'WAT':  word = 0x9000 | value; break;
+                    case 'OUT':  word = 0xA000; break;
+                    case 'SETAU': word = 0xB000; break;
+                    case 'SETAD': word = 0xC000; break;
+                    case 'DW':
+                        if (operand.startsWith('$')) {
+                            word = parseInt(operand.slice(1), 16) & 0xFFFF;
+                        } else {
+                            word = parseInt(operand, 10) & 0xFFFF;
+                        }
+                        break;
+                    case 'ORG':
+                        addr = value;
+                        continue;
+                    default:
+                        throw new Error(`Unknown instruction: ${mnemonic}`);
+                }
+
+                instructions.push({ addr, word });
+                addr++;
+            }
+
+            return instructions;
+        }
+
+        // =============================================================================
+        // UI
+        // =============================================================================
+
+        let cpu = new FDSEmulator();
+
+        function updateDisplay() {
+            // Registers
+            document.getElementById('reg-ra').textContent = cpu.ra.toString(16).toUpperCase().padStart(4, '0');
+            document.getElementById('reg-rb').textContent = cpu.rb.toString(16).toUpperCase().padStart(4, '0');
+            document.getElementById('reg-pc').textContent = cpu.pc.toString(16).toUpperCase().padStart(3, '0');
+            document.getElementById('reg-cycles').textContent = cpu.cycles;
+
+            // Flags
+            document.getElementById('flag-z').classList.toggle('active', cpu.zero);
+            document.getElementById('flag-o').classList.toggle('active', cpu.overflow);
+            document.getElementById('flag-c').classList.toggle('active', cpu.carry);
+            document.getElementById('flag-au').classList.toggle('active', cpu.addressUpper);
+
+            // Memory (show around PC)
+            const memEl = document.getElementById('memory-display');
+            let memHtml = '';
+            const startAddr = Math.max(0, cpu.pc - 2) & ~3;
+            for (let i = 0; i < 8; i++) {
+                const rowAddr = startAddr + i * 4;
+                if (rowAddr >= 8192) break;
+
+                let values = '';
+                for (let j = 0; j < 4; j++) {
+                    const a = rowAddr + j;
+                    const highlight = a === cpu.pc ? ' highlight' : '';
+                    values += `<span class="memory-value${highlight}">${cpu.memory[a].toString(16).toUpperCase().padStart(4, '0')}</span> `;
+                }
+                memHtml += `<div class="memory-row"><span class="memory-addr">${rowAddr.toString(16).toUpperCase().padStart(3, '0')}:</span> ${values}</div>`;
+            }
+            memEl.innerHTML = memHtml;
+
+            // Output
+            const outputEl = document.getElementById('output-display');
+            outputEl.innerHTML = cpu.output.map(line =>
+                `<div class="output-line">${line}</div>`
+            ).join('');
+
+            if (cpu.error) {
+                outputEl.innerHTML += `<div class="output-line error">ERROR: ${cpu.error}</div>`;
+            }
+
+            // Status lights
+            document.getElementById('cpu-light').classList.toggle('active', cpu.running || cpu.cycles > 0);
+            document.getElementById('output-light').classList.toggle('active', cpu.output.length > 0);
+
+            // DMA
+            cpu.dma.forEach((ch, i) => {
+                const names = ['mds', 'dss', 'iss', 'pra'];
+                document.getElementById('dma-' + names[i]).classList.toggle('active', ch.enabled);
+            });
+        }
+
+        function runProgram() {
+            const source = document.getElementById('editor').value;
+            try {
+                cpu.reset();
+                const program = assemble(source);
+                program.forEach(({ addr, word }) => {
+                    cpu.memory[addr] = word;
+                });
+                cpu.run();
+                updateDisplay();
+            } catch (e) {
+                cpu.reset();
+                cpu.error = e.message;
+                updateDisplay();
+            }
+        }
+
+        function stepProgram() {
+            if (cpu.cycles === 0) {
+                // First step - assemble
+                const source = document.getElementById('editor').value;
+                try {
+                    cpu.reset();
+                    const program = assemble(source);
+                    program.forEach(({ addr, word }) => {
+                        cpu.memory[addr] = word;
+                    });
+                    cpu.running = true;
+                } catch (e) {
+                    cpu.error = e.message;
+                    updateDisplay();
+                    return;
+                }
+            }
+
+            if (!cpu.halted) {
+                cpu.running = true;
+                cpu.step();
+            }
+            updateDisplay();
+        }
+
+        function resetCPU() {
+            cpu.reset();
+            updateDisplay();
+        }
+
+        // Example programs
+        const EXAMPLES = {
+            countdown: `; Countdown from 10 to 0
+; Demonstrates loops and conditionals
+
+        ORG  $000
+
+START:  MLD  COUNT      ; Load counter
+LOOP:   OUT             ; Output current value
+        SUB  ONE        ; Decrement
+        MRD  COUNT      ; Store back
+        MLD  COUNT      ; Reload to set flags
+        SKZ             ; Skip if zero
+        JMP  LOOP       ; Continue loop
+        WAT  $FFF       ; Halt
+
+COUNT:  DW   $000A      ; Start at 10
+ONE:    DW   $0001      ; Constant 1`,
+
+            add: `; Add two numbers
+; Result in RA
+
+        ORG  $000
+
+        MLD  NUM1       ; Load first number
+        ADD  NUM2       ; Add second
+        OUT             ; Output result
+        WAT  $FFF       ; Halt
+
+NUM1:   DW   $0025      ; 37 decimal
+NUM2:   DW   $001B      ; 27 decimal
+; Result: 64 ($40)`,
+
+            multiply: `; Multiply 5 x 7 using repeated addition
+; No MUL instruction, so we add repeatedly
+
+        ORG  $000
+
+        MLD  ZERO       ; Clear result
+        MRD  RESULT
+        MLD  COUNT      ; Load multiplier (7)
+
+LOOP:   MLD  RESULT     ; Load running total
+        ADD  MULT       ; Add multiplicand (5)
+        MRD  RESULT     ; Store back
+        MLD  COUNT      ; Load counter
+        SUB  ONE        ; Decrement
+        MRD  COUNT      ; Store back
+        SKZ             ; Skip if done
+        JMP  LOOP       ; Continue
+
+        MLD  RESULT     ; Load final result
+        OUT             ; Output (should be 35)
+        WAT  $FFF
+
+MULT:   DW   $0005      ; Multiplicand
+COUNT:  DW   $0007      ; Multiplier
+ONE:    DW   $0001
+ZERO:   DW   $0000
+RESULT: DW   $0000`,
+
+            banking: `; Memory banking demonstration
+; Upper bank starts at $1000
+
+        ORG  $000
+
+        ; Store in lower bank
+        MLD  VALUE
+        MRD  $100       ; Store at $100 (lower)
+
+        ; Switch to upper bank
+        SETAU
+
+        ; Store different value in upper bank
+        MLD  VALUE2
+        MRD  $100       ; Store at $1100 (upper)
+
+        ; Switch back to lower
+        SETAD
+
+        ; Read from lower bank
+        MLD  $100       ; Should be $AAAA
+        OUT
+
+        ; Read from upper bank
+        SETAU
+        MLD  $100       ; Should be $5555
+        OUT
+
+        WAT  $FFF
+
+VALUE:  DW   $AAAA
+VALUE2: DW   $5555`
+        };
+
+        function loadExample() {
+            const select = document.getElementById('examples');
+            const key = select.value;
+            if (key && EXAMPLES[key]) {
+                document.getElementById('editor').value = EXAMPLES[key];
+                resetCPU();
+            }
+            select.value = '';
+        }
+
+        // Initialize
+        createStars();
+        updateVoyagerDistance();
+        setInterval(updateVoyagerDistance, 1000);
+        updateDisplay();
+    </script>
+</body>
+</html>
