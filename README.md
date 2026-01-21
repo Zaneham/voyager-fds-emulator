@@ -112,6 +112,27 @@ Four DMA channels, each running at 115.2 kbps:
 
 Priority goes MDS > DSS > ISS > PRA. Telemetry home is more important than taking pictures. Fair enough, really. If you can't tell Earth what you saw, you may as well have not seen it.
 
+## Project Structure
+
+```
+voyager-fds-emulator/
+├── src/
+│   ├── main.c          # Entry point, CLI handling
+│   ├── fds_cpu.c       # CPU emulation, instruction execution
+│   └── fds_asm.c       # Assembler and disassembler
+├── include/
+│   └── fds.h           # Definitions, opcodes, structures
+├── tests/              # Example FDS assembly programs
+│   ├── countdown.fds
+│   ├── banking_test.fds
+│   ├── io_test.fds
+│   └── dma_test.fds
+└── docs/               # Original JPL documentation (1974-1977)
+    ├── MS 87-08 B37 FF41.pdf
+    ├── MS 87-08 B37 FF42.pdf
+    └── MS 87-08 B37 FF43.pdf
+```
+
 ## Documentation Sources
 
 This emulator was built from original JPL documentation that survived in university archives and filing cabinets:
