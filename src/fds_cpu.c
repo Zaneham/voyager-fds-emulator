@@ -3,6 +3,9 @@
  *
  * Emulates the Flight Data Subsystem processor from Voyager 1 & 2.
  * Based on JPL Memo MJS 2.64A, 7 October 1974.
+ *
+ * The real one has been running since 1977 without a reboot.
+ * This one will probably crash if you look at it funny.
  */
 
 #include "../include/fds.h"
@@ -129,7 +132,8 @@ void fds_cpu_reset(fds_cpu_t *cpu)
     cpu->bank.jump_upper = false;
     cpu->bank.addr_upper = false;
 
-    /* Memory preserved on reset - only registers cleared */
+    /* Memory preserved on reset - only registers cleared.
+     * The real Voyager has never needed this function. */
 }
 
 /* ============================================================================
@@ -197,6 +201,9 @@ uint16_t fds_io_get_parallel_output(fds_io_t *io, uint8_t channel)
  * through MDS, DSS, ISS, and PRA I/O units. Addresses auto-increment.
  * DMA "access windows" occur at least once during each instruction.
  * Priority: MDS (0) > DSS (1) > ISS (2) > PRA (3)
+ *
+ * "High-speed" meant something different in 1974. This entire subsystem
+ * runs slower than a modern keyboard interrupt handler.
  * ============================================================================ */
 
 void fds_dma_enable(fds_io_t *io, fds_dma_channel_t ch, bool enable)
@@ -407,6 +414,7 @@ int fds_cpu_step(fds_cpu_t *cpu, fds_io_t *io)
     /* --------------------------------------------------------------------
      * WAT (0011) - Wait
      * Cycles: 4097 (or until interrupt)
+     * The spacecraft equivalent of "I'll just rest my eyes for a moment"
      * -------------------------------------------------------------------- */
     case FDS_OP_WAT:
         cpu->flags.halted = true;  /* Will resume on interrupt */
@@ -897,7 +905,9 @@ int fds_cpu_step(fds_cpu_t *cpu, fds_io_t *io)
         break;
 
     default:
-        /* Unknown opcode - halt */
+        /* Unknown opcode - halt
+         * The real FDS probably wouldn't encounter this. The code up there
+         * was written by people who knew what they were doing. */
         cpu->flags.halted = true;
         return -1;
     }
@@ -912,7 +922,12 @@ int fds_cpu_step(fds_cpu_t *cpu, fds_io_t *io)
     return cycles;
 }
 
-/* Handle the 2.5ms periodic interrupt */
+/*
+ * Handle the 2.5ms periodic interrupt.
+ * This is the FDS's cosmic ray defence system. Every 2.5ms, the program
+ * counter resets to zero, giving the error-checking code a chance to run.
+ * It's been doing this 400 times per second since 1977.
+ */
 static void fds_handle_interrupt(fds_cpu_t *cpu)
 {
     /* Per MJS77-4-2006-1A: Program address forced to zero every 2.5ms */

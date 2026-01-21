@@ -4,6 +4,9 @@
  * Assembles FDS assembly source into binary.
  * Based on Figure 2 of JPL Memo MJS 2.64A, 7 October 1974.
  *
+ * The original engineers used punch cards. You get text files.
+ * You're welcome.
+ *
  * Instruction encoding reference (Figure 2):
  *
  * SIMPLE ADDRESS INSTRUCTIONS (12-bit address):

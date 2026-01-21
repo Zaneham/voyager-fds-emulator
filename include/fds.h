@@ -6,7 +6,10 @@
  * J. Wooddell, 7 October 1974
  *
  * This processor flew on Voyager 1 and Voyager 2.
- * Launched 1977. Still operating 2026.
+ * Launched 1977. Still operating 2026. Your laptop battery didn't.
+ *
+ * Currently 24+ billion kilometres away. Response time: 44 hours.
+ * Still faster than some enterprise software deployments.
  */
 
 #ifndef FDS_H
@@ -17,20 +20,23 @@
 
 /* ============================================================================
  * PROCESSOR CONSTANTS
+ *
+ * These numbers got humanity to interstellar space. Your smartwatch has
+ * better specs but can't find Neptune.
  * ============================================================================ */
 
-#define FDS_MEMORY_SIZE      8192    /* 8K x 16-bit words (two 4K banks) */
+#define FDS_MEMORY_SIZE      8192    /* 8K x 16-bit words. All of it. For everything. */
 #define FDS_MEMORY_BANK      4096    /* 4K words per bank */
 #define FDS_WORD_BITS        16
 #define FDS_ADDR_BITS        12      /* 12-bit program address within bank */
-#define FDS_ADDR_BITS_EXT    13      /* 13-bit extended address (8K) */
+#define FDS_ADDR_BITS_EXT    13      /* 13-bit extended address (8K total) */
 
-/* Clock timing (for cycle-accurate emulation if desired) */
-#define FDS_CLOCK_HZ         806400  /* 806.4 kHz master clock */
+/* Clock timing - glacial by modern standards, eternal by space standards */
+#define FDS_CLOCK_HZ         806400  /* 806.4 kHz. Not a typo. kHz. */
 #define FDS_MASTER_OSC_HZ    4838400 /* 4.8384 MHz master oscillator */
 #define FDS_MEM_ACCESS_HZ    403200  /* 403.2 kHz memory access rate */
 #define FDS_CYCLE_US         2.48    /* microseconds per instruction cycle */
-#define FDS_INTERRUPT_MS     2.5     /* Interrupt period in milliseconds */
+#define FDS_INTERRUPT_MS     2.5     /* For cosmic ray error recovery. Space is rude. */
 #define FDS_INTERRUPT_CYCLES 1008    /* Cycles between interrupts (2.5ms / 2.48us) */
 
 /* ============================================================================
@@ -75,9 +81,11 @@
  * - GR1-GR16:  16 general registers
  * - MP1-MP32:  32 memory pointers
  * - IR1-IR8:   8 index registers
- * - GR1, MP1, and IR1 all refer to the SAME register
+ * - GR1, MP1, and IR1 all refer to the SAME register (it's complicated)
  * - 73 additional registers available as counters
  * - All reside in top 128 memory locations (F80-FFF)
+ *
+ * The naming scheme makes perfect sense if you were there in 1974.
  * ============================================================================ */
 
 /* General Registers (GR1-GR16) - offsets from F80 */
@@ -189,7 +197,9 @@ typedef struct {
     bool interrupt;      /* Interrupt pending */
 } fds_flags_t;
 
-/* Memory banking state (per MJS77-4-2006-1A section 4.2.5.1) */
+/* Memory banking state (per MJS77-4-2006-1A section 4.2.5.1)
+ * Because 4K at a time wasn't enough. So they added complexity.
+ * The JPL solution to running out of address bits. */
 typedef struct {
     bool jump_upper;     /* SETJU: next JMP goes to upper 4K */
     bool addr_upper;     /* SETAU: absolute addresses in upper 4K */
@@ -240,14 +250,14 @@ typedef struct {
 
 /* DMA channel definitions (4 channels per MJS77-4-2006-1A) */
 #define FDS_DMA_CHANNELS     4
-#define FDS_DMA_RATE_BPS     115200   /* 115.2 kbps per channel */
-#define FDS_DMA_TOTAL_BPS    379000   /* Minimum total bandwidth */
+#define FDS_DMA_RATE_BPS     115200   /* 115.2 kbps per channel. Per CHANNEL. */
+#define FDS_DMA_TOTAL_BPS    379000   /* Enough to stream Jupiter at very low resolution */
 
 typedef enum {
-    FDS_DMA_MDS = 0,     /* Modulation/Demodulation - telemetry out */
-    FDS_DMA_DSS = 1,     /* Data Storage - tape recorder */
-    FDS_DMA_ISS = 2,     /* Imaging Science */
-    FDS_DMA_PRA = 3,     /* Planetary Radio Astronomy */
+    FDS_DMA_MDS = 0,     /* Modulation/Demodulation - phone home */
+    FDS_DMA_DSS = 1,     /* Data Storage - the tape recorder (yes, tape) */
+    FDS_DMA_ISS = 2,     /* Imaging Science - the good stuff */
+    FDS_DMA_PRA = 3,     /* Planetary Radio Astronomy - listening to Jupiter hum */
 } fds_dma_channel_t;
 
 /* DMA channel state */

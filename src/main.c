@@ -2,6 +2,9 @@
  * main.c - Voyager FDS Emulator Test Harness
  *
  * Simple test program to validate the FDS emulator.
+ *
+ * If this works, you can pretend you're NASA.
+ * If it doesn't, at least you're closer to home than Voyager.
  */
 
 #include "../include/fds.h"
@@ -40,7 +43,8 @@ static uint16_t test_countdown[] = {
 static void print_usage(const char *prog)
 {
     printf("Voyager FDS Emulator & Assembler\n");
-    printf("Based on JPL Memo MJS 2.64A, 7 October 1974\n\n");
+    printf("Based on JPL Memo MJS 2.64A, 7 October 1974\n");
+    printf("The computer that's leaving the solar system. On purpose.\n\n");
     printf("Usage: %s [options] [file]\n", prog);
     printf("\nOptions:\n");
     printf("  -a, --assemble   Assemble .fds source file\n");
@@ -119,8 +123,11 @@ static void run_test_program(bool debug, bool step_mode)
     printf("\nCounter value at 011: %04X\n", cpu.memory[0x011]);
     if (cpu.memory[0x011] == 0x0000) {
         printf("TEST PASSED: Countdown reached zero.\n");
+        printf("You are now qualified to work on spacecraft computers.\n");
+        printf("(This is not legally binding.)\n");
     } else {
         printf("TEST FAILED: Expected 0000.\n");
+        printf("Voyager would be disappointed, but it's too far away to care.\n");
     }
 }
 
@@ -134,7 +141,7 @@ static void run_interactive(fds_cpu_t *cpu)
     printf("  r, run     - Run until halt\n");
     printf("  d, dump    - Dump CPU state\n");
     printf("  m ADDR     - Show memory at ADDR (hex)\n");
-    printf("  q, quit    - Exit\n\n");
+    printf("  q, quit    - Exit (Voyager cannot do this, it's committed)\n\n");
 
     while (1) {
         printf("fds> ");

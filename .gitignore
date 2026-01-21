@@ -20,3 +20,6 @@ Thumbs.db
 # OCR working files
 ocr_output/
 ocr_voyager.py
+
+# Audit working files
+AUDIT_NOTES.md
