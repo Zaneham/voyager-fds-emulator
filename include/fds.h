@@ -10,6 +10,10 @@
  *
  * Currently 24+ billion kilometres away. Response time: 44 hours.
  * Still faster than some enterprise software deployments.
+ *
+ *
+ * At all possible points I have endeavoured to adhere to JPL's 'rule of ten' which is
+ * rather fitting as they made this thing in the first place!
  */
 
 #ifndef FDS_H
