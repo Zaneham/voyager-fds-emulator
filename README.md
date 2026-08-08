@@ -199,4 +199,3 @@ Available to discuss interstellar computing over coffee. Has opinions about 806.
 
 ---
 
-*"Voyager's last software update was in 1990. Thirty-five years of continuous operation, 24 billion kilometres from the nearest patch. We can't get a printer driver to survive a Windows update."*
